@@ -37,39 +37,13 @@ type
 implementation
 
 class function TDwmAero.OSMajorVersion: Cardinal;
-
-  function GetOSVersionInfo(var Info: TOSVersionInfoEx): Boolean;
-  begin
-    FillChar(Info, SizeOf(TOSVersionInfoEx), 0);
-    Info.dwOSVersionInfoSize := SizeOf(TOSVersionInfoEx);
-    Result := GetVersionEx(TOSVersionInfo(Addr(Info)^));
-    if (not Result) then
-      Info.dwOSVersionInfoSize := 0;
-  end;
-
-var
-  OSVersionInfoEx: TOSVersionInfoEx;
 begin
-  Result := 0;
-
-  if GetOSVersionInfo(OSVersionInfoEx) then
-  begin
-    Result := OSVersionInfoEx.dwMajorVersion;
-  end;
+  Result := Win32MajorVersion;
 end;
 
 class function TDwmAero.IsAeroEnabled: Boolean;
-var
-  Enabled: BOOL;
 begin
-  Result := False;
-
-  if OSMajorVersion >= 6 then
-  begin
-    DwmIsCompositionEnabled(Enabled);
-    Result := Enabled;
-  end;
-
+  Result := DwmCompositionEnabled;
 end;
 
 class procedure TDwmAero.SetShadow(Handle: THandle);
@@ -111,6 +85,7 @@ begin
   FEnabledShadow := True;
   FEnabledNoBorder := True;
 
+  SetEnabledShadow(FEnabledShadow);
   SetEnabledNoBorder(FEnabledNoBorder);
 end;
 
@@ -126,6 +101,12 @@ begin
   begin
     FEnabledShadow := Value;
   end;
+
+  if FEnabledShadow and (FOSMajorVersion < 6) then
+  begin
+    SetClassLong(FParent.Handle, GCL_STYLE, GetClassLong(FParent.Handle, GCL_STYLE) or CS_DROPSHADOW);
+  end;
+
 end;
 
 procedure TDwmNoBorderForm.SetEnabledNoBorder(const Value: Boolean);
