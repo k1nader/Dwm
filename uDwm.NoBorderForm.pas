@@ -8,6 +8,7 @@ uses
 type
   TDwmAero = class(TObject)
   public
+    class function OSMajorVersion: Cardinal;
     class function IsAeroEnabled: Boolean;
     class procedure SetShadow(Handle: THandle);
     class procedure SetFramesSize(Handle: Cardinal; Left, Top, Width, Height: Integer; var FrameSize: Integer);
@@ -17,6 +18,7 @@ type
   private
     FParent: TForm;
     FOldWndProc: TWndMethod;
+    FOSMajorVersion: Cardinal;
     FAeroEnabled: Boolean;
     FEnabledShadow: Boolean;
     FEnabledNoBorder: Boolean;
@@ -34,7 +36,7 @@ type
 
 implementation
 
-class function TDwmAero.IsAeroEnabled: Boolean;
+class function TDwmAero.OSMajorVersion: Cardinal;
 
   function GetOSVersionInfo(var Info: TOSVersionInfoEx): Boolean;
   begin
@@ -47,18 +49,27 @@ class function TDwmAero.IsAeroEnabled: Boolean;
 
 var
   OSVersionInfoEx: TOSVersionInfoEx;
+begin
+  Result := 0;
+
+  if GetOSVersionInfo(OSVersionInfoEx) then
+  begin
+    Result := OSVersionInfoEx.dwMajorVersion;
+  end;
+end;
+
+class function TDwmAero.IsAeroEnabled: Boolean;
+var
   Enabled: BOOL;
 begin
   Result := False;
 
-  if GetOSVersionInfo(OSVersionInfoEx) then
+  if OSMajorVersion >= 6 then
   begin
-    if OSVersionInfoEx.dwMajorVersion >= 6 then
-    begin
-      DwmIsCompositionEnabled(Enabled);
-      Result := Enabled;
-    end;
+    DwmIsCompositionEnabled(Enabled);
+    Result := Enabled;
   end;
+
 end;
 
 class procedure TDwmAero.SetShadow(Handle: THandle);
@@ -95,9 +106,12 @@ begin
   FParent := TForm(AOwner);
   FOldWndProc := FParent.WindowProc;
   FParent.WindowProc := WndProc;
+  FOSMajorVersion := TDwmAero.OSMajorVersion;
   FAeroEnabled := TDwmAero.IsAeroEnabled;
   FEnabledShadow := True;
   FEnabledNoBorder := True;
+
+  SetEnabledNoBorder(FEnabledNoBorder);
 end;
 
 destructor TDwmNoBorderForm.Destroy;
@@ -120,6 +134,11 @@ begin
   begin
     FEnabledNoBorder := Value;
   end;
+
+  if FEnabledNoBorder and (FOSMajorVersion < 6) then
+  begin
+    FParent.BorderStyle := bsNone;
+  end;
 end;
 
 procedure TDwmNoBorderForm.WndProc(var Msg: TMessage);
@@ -136,18 +155,27 @@ begin
   begin
     if Msg.Msg = WM_NCCALCSIZE then
     begin
-      if FEnabledNoBorder then
+      if FOSMajorVersion >= 6 then
       begin
-        Msg.Result := 0;
-
-        if FParent.WindowState = wsMaximized then
+        if FEnabledNoBorder then
         begin
-          WMNCCalcSize := TWMNCCalcSize(Msg);
-          BorderSpace := GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
-          Inc(WMNCCalcSize.CalcSize_Params.rgrc[0].Top, BorderSpace);
-          Inc(WMNCCalcSize.CalcSize_Params.rgrc[0].Left, BorderSpace);
-          Dec(WMNCCalcSize.CalcSize_Params.rgrc[0].Right, BorderSpace);
-          Dec(WMNCCalcSize.CalcSize_Params.rgrc[0].Bottom, BorderSpace);
+
+          Msg.Result := 0;
+
+          if FParent.WindowState = wsMaximized then
+          begin
+            WMNCCalcSize := TWMNCCalcSize(Msg);
+            BorderSpace := GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+            Inc(WMNCCalcSize.CalcSize_Params.rgrc[0].Top, BorderSpace);
+            Inc(WMNCCalcSize.CalcSize_Params.rgrc[0].Left, BorderSpace);
+            Dec(WMNCCalcSize.CalcSize_Params.rgrc[0].Right, BorderSpace);
+            Dec(WMNCCalcSize.CalcSize_Params.rgrc[0].Bottom, BorderSpace);
+          end;
+        end
+        else
+        begin
+          if Assigned(FOldWndProc) then
+            FOldWndProc(Msg);
         end;
       end
       else
