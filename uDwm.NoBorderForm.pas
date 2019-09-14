@@ -18,11 +18,18 @@ type
     FParent: TForm;
     FOldWndProc: TWndMethod;
     FAeroEnabled: Boolean;
+    FEnabledShadow: Boolean;
+    FEnabledNoBorder: Boolean;
   protected
     procedure WndProc(var Msg: TMessage); virtual;
+    procedure SetEnabledShadow(const Value: Boolean);
+    procedure SetEnabledNoBorder(const Value: Boolean);
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+  published
+    property EnabledShadow: Boolean read FEnabledShadow write SetEnabledShadow default True;
+    property EnabledNoBorder: Boolean read FEnabledNoBorder write SetEnabledNoBorder default True;
   end;
 
 implementation
@@ -89,12 +96,30 @@ begin
   FOldWndProc := FParent.WindowProc;
   FParent.WindowProc := WndProc;
   FAeroEnabled := TDwmAero.IsAeroEnabled;
+  FEnabledShadow := True;
+  FEnabledNoBorder := True;
 end;
 
 destructor TDwmNoBorderForm.Destroy;
 begin
   inherited;
   FParent.WindowProc := FOldWndProc;
+end;
+
+procedure TDwmNoBorderForm.SetEnabledShadow(const Value: Boolean);
+begin
+  if FEnabledShadow <> Value then
+  begin
+    FEnabledShadow := Value;
+  end;
+end;
+
+procedure TDwmNoBorderForm.SetEnabledNoBorder(const Value: Boolean);
+begin
+  if FEnabledNoBorder <> Value then
+  begin
+    FEnabledNoBorder := Value;
+  end;
 end;
 
 procedure TDwmNoBorderForm.WndProc(var Msg: TMessage);
@@ -111,16 +136,24 @@ begin
   begin
     if Msg.Msg = WM_NCCALCSIZE then
     begin
-      Msg.Result := 0;
-
-      if FParent.WindowState = wsMaximized then
+      if FEnabledNoBorder then
       begin
-        WMNCCalcSize := TWMNCCalcSize(Msg);
-        BorderSpace := GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
-        Inc(WMNCCalcSize.CalcSize_Params.rgrc[0].Top, BorderSpace);
-        Inc(WMNCCalcSize.CalcSize_Params.rgrc[0].Left, BorderSpace);
-        Dec(WMNCCalcSize.CalcSize_Params.rgrc[0].Right, BorderSpace);
-        Dec(WMNCCalcSize.CalcSize_Params.rgrc[0].Bottom, BorderSpace);
+        Msg.Result := 0;
+
+        if FParent.WindowState = wsMaximized then
+        begin
+          WMNCCalcSize := TWMNCCalcSize(Msg);
+          BorderSpace := GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+          Inc(WMNCCalcSize.CalcSize_Params.rgrc[0].Top, BorderSpace);
+          Inc(WMNCCalcSize.CalcSize_Params.rgrc[0].Left, BorderSpace);
+          Dec(WMNCCalcSize.CalcSize_Params.rgrc[0].Right, BorderSpace);
+          Dec(WMNCCalcSize.CalcSize_Params.rgrc[0].Bottom, BorderSpace);
+        end;
+      end
+      else
+      begin
+        if Assigned(FOldWndProc) then
+          FOldWndProc(Msg);
       end;
     end
     else if Msg.Msg = WM_PAINT then
@@ -128,7 +161,7 @@ begin
       if Assigned(FOldWndProc) then
         FOldWndProc(Msg);
 
-      if FAeroEnabled then
+      if FEnabledShadow and FAeroEnabled then
       begin
         TDwmAero.SetShadow(FParent.Handle);
       end;
